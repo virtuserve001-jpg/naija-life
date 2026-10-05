@@ -268,10 +268,13 @@ Shipping a new version does **not** log players out. Verified automatically by
 - On `SIGTERM` the server saves the world **first**, then broadcasts `restarting` to
   everyone, then drains the sockets. The new process boots while the old one is still
   draining, so it loads the file that was just written.
-- The client reconnects with exponential backoff (0.8s → 12s) behind a
+- The client reconnects with exponential backoff (**0.8s doubling to 60s, with jitter**
+  so everyone doesn't retry on the same beat) behind a
   *"🔄 Server updating — your progress is saved"* overlay. No error screen, no re-login,
   and it doubles as protection against flaky mobile networks.
 - Resuming with a **forged token is rejected** (covered by the test).
+- A **background tab doesn't retry at all** — it waits quietly and reconnects the
+  instant you come back, which saves battery and mobile data.
 
 Result: a deploy costs players a few seconds of "reconnecting", and they resume in the
 same district with the same money, job and phone. Closing the tab and coming back later

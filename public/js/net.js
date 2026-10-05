@@ -32,6 +32,15 @@ class Net {
     this.wantReconnect = true;
     this.reconnectDelay = 800;
     this.reconnectTimer = null;
+    this.paused = false;
+
+    // A background tab shouldn't hammer the server or burn mobile data.
+    // Wait quietly, then reconnect the moment the player comes back.
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && this.paused) { this.paused = false; this.scheduleReconnect(); }
+      });
+    }
   }
 
   saveSession(token, username) {
@@ -70,11 +79,17 @@ class Net {
     });
   }
 
-  /* Reconnect with exponential backoff — forever, until we're told to stop. */
+  /* Reconnect with exponential backoff + jitter — 0.8s doubling to 60s.
+     Jitter stops every player from retrying on the same beat after an outage. */
   scheduleReconnect() {
-    if (!this.wantReconnect || this.reconnectTimer) return;
-    const delay = this.reconnectDelay;
-    this.reconnectDelay = Math.min(Math.round(this.reconnectDelay * 1.8), 12000);
+    if (!this.wantReconnect || this.reconnectTimer || this.paused) return;
+    if (typeof document !== 'undefined' && document.hidden) {
+      this.paused = true;                      // resume on visibilitychange
+      return;
+    }
+    const base = this.reconnectDelay;
+    this.reconnectDelay = Math.min(this.reconnectDelay * 2, 60000);
+    const delay = Math.round(base * (0.5 + Math.random()));
     this.emit('reconnecting', { in: Math.round(delay / 1000) });
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
