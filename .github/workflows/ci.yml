@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Smoke test the game server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install
+        run: npm install
+
+      # Boots the real server and drives two WebSocket clients through
+      # register → see each other → move → chat → DM → act → reconnect → save.
+      - name: End-to-end smoke test
+        run: npm test
+
+      - name: Static client build
+        run: npm run build:static
+
+  # Optional: auto-deploy to Render on every push to main.
+  # To enable, create a Deploy Hook in Render (Settings → Deploy Hook) and add
+  # it as a repository secret named RENDER_DEPLOY_HOOK. Leave it unset and this
+  # job does nothing.
+  deploy:
+    name: Trigger Render deploy
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping deploy hook
+        if: ${{ secrets.RENDER_DEPLOY_HOOK != '' }}
+        run: curl --fail --silent --show-error -X POST "$HOOK"
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}

@@ -1,5 +1,7 @@
 # 🇳🇬 Naija Life
 
+[![CI](https://github.com/virtuserve001-jpg/naija-life/actions/workflows/ci.yml/badge.svg)](https://github.com/virtuserve001-jpg/naija-life/actions/workflows/ci.yml)
+
 **A real-time, multiplayer life-sim of Nigeria — 12 cities, a working phone, real naira, and every hustle.**
 
 A GTA-weight answer to *Lagos Life*, widened to the whole country. Walk the streets, take a danfo across town,
