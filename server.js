@@ -16,7 +16,7 @@ let WebSocketServer;
 try { ({ WebSocketServer } = require('ws')); }
 catch (e) { ({ WebSocketServer } = await import('./vendor/ws/index.js').then(m => m.default || m)); }
 
-import { world, players, byUsername, tickWorld, clock, timeString, saveWorld, loadWorld, npcsIn, ambientFor, radioLine, addNews } from './src/sim/world.js';
+import { world, players, byUsername, tickWorld, clock, timeString, saveWorld, loadWorld, npcsIn, ambientFor, radioLine, addNews, DATA_DIR } from './src/sim/world.js';
 import { createPlayer, publicPlayer, log, recalc, need, EDU_LEVELS } from './src/sim/player.js';
 import { ACTIONS } from './src/sim/actions.js';
 import { ACTIONS_LIFE } from './src/sim/actions_life.js';
@@ -352,6 +352,6 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 
 server.listen(PORT, HOST, () => {
-  console.log(`\n  🇳🇬  NAIJA LIFE running → http://localhost:${PORT}\n       ${venuesPlaced} venues placed · players: ${players.size} · month ${world.monthIndex} · fuel ₦${Math.round(world.macro.fuelPrice)}/L\n`);
+  console.log(`\n  🇳🇬  NAIJA LIFE running → http://localhost:${PORT}\n       ${venuesPlaced} venues placed · players: ${players.size} · month ${world.monthIndex} · fuel ₦${Math.round(world.macro.fuelPrice)}/L\n       saving to ${DATA_DIR}\n`);
 });
 

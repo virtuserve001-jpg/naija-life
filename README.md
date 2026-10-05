@@ -186,7 +186,7 @@ Then add a Volume mounted at `/data` and set `NAIJA_DATA_DIR=/data`.
 **Any Docker host / VPS** *(Hetzner, DigitalOcean, Oracle free tier…)*
 ```bash
 docker build -t naija-life .
-docker run -d -p 80:8080 -v naija_data:/data --restart unless-stopped naija-life
+docker run -d -p 80:8080 -v naija_data:/app/data --restart unless-stopped naija-life
 ```
 
 **Heroku / Dokku / Koyeb** — the repo ships a `Procfile` (`web: npm start`).
@@ -197,6 +197,29 @@ docker run -d -p 80:8080 -v naija_data:/data --restart unless-stopped naija-life
 > is inside the free allowance.
 
 ---
+
+### A2. Koyeb — free and always-on
+
+Koyeb's free tier runs one **always-on** service (512MB RAM, 0.1 vCPU, 2GB disk,
+100GB bandwidth) and deploys straight from GitHub — the best free option for a
+game, because unlike Render's free tier it never sleeps.
+
+1. **koyeb.com** → sign up with **GitHub**
+2. **Create Web Service** → **GitHub** → pick `naija-life`
+3. Builder: **Dockerfile** (detected automatically)
+4. Region: **Frankfurt** (closest to West Africa)
+5. Leave the port as Koyeb's default — the app reads `PORT` from the environment
+6. Health check path: `/healthz`
+7. **Deploy**
+
+You get `https://naija-life-xxxx.koyeb.app`. The first build takes ~2 minutes.
+
+> **Heads-up on the disk:** Koyeb containers are **stateless by design**. The world
+> persists while the container is running, but a redeploy or restart resets it to
+> month 1. That's fine while you're playing around; if you want a world that
+> survives redeploys for free, ask me to add Cloudflare R2 persistence (10GB free)
+> so `world.json` lives outside the container. Sessions still survive either way —
+> players resume automatically when the container comes back.
 
 ### B. Vercel + separate backend
 

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -13,9 +14,25 @@ import { need, damage, log, earn, spend, addSkill, addItem, recalc, monthlyRent,
 // Where the world is persisted. Hosts with an ephemeral filesystem (Render, Railway,
 // Heroku) wipe the disk on redeploy — mount a volume and point NAIJA_DATA_DIR at it
 // to keep your citizens alive across deploys.
-export const DATA_DIR = process.env.NAIJA_DATA_DIR
-  ? path.resolve(process.env.NAIJA_DATA_DIR)
-  : path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'data');
+/* Pick the first directory we can actually write to. Containers sometimes mount
+   a read-only or missing volume — falling back beats silently losing the world. */
+function pickDataDir() {
+  const candidates = [];
+  if (process.env.NAIJA_DATA_DIR) candidates.push(path.resolve(process.env.NAIJA_DATA_DIR));
+  candidates.push(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'data'));
+  candidates.push(path.join(os.tmpdir(), 'naija-life'));
+  for (const dir of candidates) {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      const probe = path.join(dir, '.write-test');
+      fs.writeFileSync(probe, 'ok');
+      fs.unlinkSync(probe);
+      return dir;
+    } catch (e) { /* try the next candidate */ }
+  }
+  return candidates[candidates.length - 1];
+}
+export const DATA_DIR = pickDataDir();
 const SAVE_PATH = path.join(DATA_DIR, 'world.json');
 
 export const world = {
