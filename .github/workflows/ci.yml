@@ -42,8 +42,14 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
+      # Note: `secrets` is NOT usable inside an `if:` expression (GitHub rejects
+      # it as an unrecognized named-value), so the guard lives in the shell.
       - name: Ping deploy hook
-        if: ${{ secrets.RENDER_DEPLOY_HOOK != '' }}
-        run: curl --fail --silent --show-error -X POST "$HOOK"
         env:
           HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "RENDER_DEPLOY_HOOK not set - skipping deploy."
+            exit 0
+          fi
+          curl --fail --silent --show-error -X POST "$HOOK"
