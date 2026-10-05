@@ -233,6 +233,30 @@ All optional — the game runs with zero config. See `.env.example`.
 | `NAIJA_DATA_DIR` | `./data` | Point at a mounted volume so players survive redeploys |
 | `NAIJA_WS_URL` | — | Only for `npm run build:static`; the `wss://` backend URL |
 
+### 🔄 Sessions survive upgrades (nobody gets signed out on deploy)
+
+Shipping a new version does **not** log players out. Verified automatically by
+`npm test`.
+
+- At sign-in the server issues a **token and stores it on the player record**, so it
+  is written into `world.json` and outlives the process.
+- The browser keeps that token in `localStorage` and replays it on every reconnect —
+  **the password is never stored in the browser**.
+- On `SIGTERM` the server saves the world **first**, then broadcasts `restarting` to
+  everyone, then drains the sockets. The new process boots while the old one is still
+  draining, so it loads the file that was just written.
+- The client reconnects with exponential backoff (0.8s → 12s) behind a
+  *"🔄 Server updating — your progress is saved"* overlay. No error screen, no re-login,
+  and it doubles as protection against flaky mobile networks.
+- Resuming with a **forged token is rejected** (covered by the test).
+
+Result: a deploy costs players a few seconds of "reconnecting", and they resume in the
+same district with the same money, job and phone. Closing the tab and coming back later
+works the same way.
+
+> True *zero*-downtime (no gap at all) would need two instances behind a load balancer
+> sharing state — overkill here. This keeps the gap invisible instead.
+
 There is a `/healthz` endpoint (`{"ok":true,"players":7,"month":3,…}`) for uptime
 monitors and platform health checks. `SIGTERM` saves the world before exiting, so a
 rolling redeploy doesn't lose anyone.
@@ -292,7 +316,7 @@ automatically.
 
 ### Before you ship
 ```bash
-npm test                       # backend end-to-end
+npm test                       # 13 smoke assertions + 10 session-persistence assertions
 npm run build:static           # confirm the static bundle builds
 ```
 Then load the deployed URL on a real phone and check: joystick walks, tap-to-move

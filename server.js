@@ -120,6 +120,7 @@ function worldSnapshot() {
 
 /* ───────────────────────── ws handling ───────────────────────── */
 wss.on('connection', (ws) => {
+  if (shuttingDown) { try { ws.send(JSON.stringify({ t:'restarting', in: 5 })); } catch (e) {} }
   ws.isAlive = true;
   ws.on('pong', () => ws.isAlive = true);
   let me = null;
@@ -145,7 +146,8 @@ wss.on('connection', (ws) => {
       players.set(p.id, p); byUsername.set(username, p);
       me = p; ws.playerId = p.id; sockets.set(p.id, ws);
       p.online = true;
-      send(ws, { t:'auth', ok:true, token: token(), player: fullYou(p).player });
+      p.token = token();
+      send(ws, { t:'auth', ok:true, token: p.token, player: fullYou(p).player });
       send(ws, fullYou(p));
       send(ws, worldSnapshot());
       send(ws, { t:'nearby', players: nearby(p), npcs: npcsIn(p.districtId), district: p.districtId });
@@ -163,11 +165,29 @@ wss.on('connection', (ws) => {
       if (existing) { try { existing.close(); } catch (e) {} }
       me = p; ws.playerId = p.id; sockets.set(p.id, ws);
       p.online = true; p.inbox = p.inbox || [];
-      send(ws, { t:'auth', ok:true, token: token(), player: fullYou(p).player });
+      p.token = token();
+      send(ws, { t:'auth', ok:true, token: p.token, player: fullYou(p).player });
       send(ws, fullYou(p));
       send(ws, worldSnapshot());
       send(ws, { t:'nearby', players: nearby(p), npcs: npcsIn(p.districtId), district: p.districtId });
       console.log(`[•] ${username} logged in`);
+      return;
+    }
+
+    /* ── resume a session after a reconnect / server restart ── */
+    if (msg.t === 'resume') {
+      const tok = String(msg.token || '');
+      const p = tok ? [...players.values()].find(q => q.token && q.token === tok) : null;
+      if (!p) return send(ws, { t:'auth', ok:false, msg:'Session expired. Please sign in again.' });
+      if (shuttingDown) return send(ws, { t:'restarting', in: 5 });
+      const existing = sockets.get(p.id);
+      if (existing) { try { existing.close(); } catch (e) {} }
+      me = p; ws.playerId = p.id; sockets.set(p.id, ws);
+      p.online = true; p.inbox = p.inbox || [];
+      send(ws, { t:'auth', ok:true, token: p.token, player: fullYou(p).player, resumed: true });
+      send(ws, fullYou(p));
+      send(ws, worldSnapshot());
+      send(ws, { t:'nearby', players: nearby(p), npcs: npcsIn(p.districtId), district: p.districtId });
       return;
     }
 
@@ -295,7 +315,7 @@ if (!world.news.length) {
 }
 
 let nearbyCounter = 0;
-setInterval(() => {
+const tickTimer = setInterval(() => {
   tickWorld();
   nearbyCounter++;
   const snap = worldSnapshot();
@@ -310,9 +330,28 @@ setInterval(() => {
   if (world.tick % TUNING.saveEveryTicks === 0) saveWorld();
 }, 1000);
 
+/* ───────── graceful shutdown: never lose a session on redeploy ─────────
+   Order matters: save the world FIRST, then tell everyone to reconnect,
+   then drain the sockets. The new process boots while the old one is still
+   draining, so it loads the file we just wrote.                          */
+let shuttingDown = false;
+function shutdown(sig) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[naija-life] ${sig} — saving world, telling ${sockets.size} player(s) to reconnect…`);
+  clearInterval(tickTimer);
+  clearInterval(hb);
+  saveWorld();                                   // persist first
+  for (const [, ws] of sockets) try { send(ws, { t:'restarting', in: 5 }); } catch (e) {}
+  setTimeout(() => {
+    for (const [, ws] of sockets) try { ws.close(1001, 'server restarting'); } catch (e) {}
+    setTimeout(() => process.exit(0), 400);
+  }, 1200);
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
+
 server.listen(PORT, HOST, () => {
   console.log(`\n  🇳🇬  NAIJA LIFE running → http://localhost:${PORT}\n       ${venuesPlaced} venues placed · players: ${players.size} · month ${world.monthIndex} · fuel ₦${Math.round(world.macro.fuelPrice)}/L\n`);
 });
 
-process.on('SIGINT', () => { saveWorld(); console.log('\n[naija-life] saved. Bye.'); process.exit(0); });
-process.on('SIGTERM', () => { saveWorld(); console.log('\n[naija-life] SIGTERM — saved. Bye.'); process.exit(0); });

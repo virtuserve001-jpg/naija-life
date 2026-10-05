@@ -362,3 +362,18 @@ input{font-family:inherit}
   body.is-touch #stick i{width:40px;height:40px;margin:-20px 0 0 -20px}
   body.is-touch #touchE{width:56px;height:56px;font-size:16px}
 }
+
+
+/* ═══════════════ RECONNECT / RESTART OVERLAY ═══════════════
+   Shown while the socket is down. The game keeps its state underneath,
+   so a redeploy is a few seconds of this instead of a re-login.        */
+#netOverlay{position:absolute;inset:0;z-index:90;display:flex;align-items:center;justify-content:center;
+  background:rgba(8,12,20,.72);backdrop-filter:blur(3px)}
+#netOverlay.hidden{display:none}
+.net-card{background:linear-gradient(180deg,#182234,#121a29);border:1px solid rgba(255,255,255,.09);
+  border-radius:16px;padding:22px 26px;text-align:center;box-shadow:0 18px 50px rgba(0,0,0,.5);max-width:300px}
+.net-spin{width:28px;height:28px;margin:0 auto 12px;border:3px solid rgba(255,255,255,.14);
+  border-top-color:#4ade80;border-radius:50%;animation:netspin .9s linear infinite}
+@keyframes netspin{to{transform:rotate(360deg)}}
+#netTitle{font-size:15px;font-weight:700;color:#eaf0f8}
+#netSub{margin-top:5px;font-size:11.5px;color:#8ea0b8;line-height:1.5}

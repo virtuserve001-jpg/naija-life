@@ -10,19 +10,67 @@ const view = new WorldView(document.getElementById('world'));
 let started = false;
 
 /* ══════════════ boot ══════════════ */
+let authBuilt = false;
+let serverRestarting = false;      // true when the server warned us it is going down
+
 async function boot() {
   const st = document.getElementById('bootStatus');
+  st.textContent = 'connecting to the server…';
+
+  net.on('open', onSocketOpen);
+  net.on('auth', onAuth);
+  net.on('reconnecting', (m) => {
+    // a planned restart gets a reassuring message; a random drop does not
+    if (serverRestarting) showNetOverlay('🔄 Server updating', `Back in ${m.in || 1}s…`);
+    else showNetOverlay('Connection lost', `Reconnecting in ${m.in || 1}s…`);
+  });
+  net.on('restarting', (m) => {
+    serverRestarting = true;
+    // the server told us it is going down — wait out the restart before retrying
+    net.reconnectDelay = Math.max(net.reconnectDelay, (m.in || 5) * 1000);
+    showNetOverlay('🔄 Server updating', 'Your progress is saved — you will be right back.');
+  });
+  net.on('closed', () => {
+    const el = document.getElementById('netOverlay');
+    if (started && el && el.classList.contains('hidden')) {
+      showNetOverlay(serverRestarting ? '🔄 Server updating' : 'Connection lost', 'Reconnecting…');
+    }
+  });
+
   try {
-    st.textContent = 'connecting to the server…';
-    await net.connect();
-    st.textContent = 'loading Nigeria…';
-    buildAuth();
-    document.getElementById('boot').classList.add('hidden');
-    document.getElementById('auth').classList.remove('hidden');
+    await net.connect();          // resolves on open; resume is sent automatically
   } catch (e) {
-    st.innerHTML = 'Could not reach the server.<br/><span style="font-size:12px">Is it running? <code>npm start</code></span>';
+    st.innerHTML = 'Could not reach the server.<br/><span style="font-size:12px">Retrying automatically…</span>';
     console.error(e);
   }
+}
+
+/* Fires on every (re)connect. With a saved session we say nothing — the
+   server's 'auth' reply brings the player straight back into the world. */
+function onSocketOpen() {
+  if (net.session && net.session.token) return;
+  showAuthScreen('');
+}
+
+function showAuthScreen(message) {
+  if (!authBuilt) { authBuilt = true; buildAuth(); }
+  document.getElementById('boot').classList.add('hidden');
+  document.getElementById('auth').classList.remove('hidden');
+  const last = (net.session && net.session.username) || localStorage.getItem('naija_last') || '';
+  if (last) document.getElementById('logUser').value = last;
+  if (message) err(message);
+}
+
+function showNetOverlay(title, sub) {
+  const el = document.getElementById('netOverlay');
+  if (!el) return;
+  document.getElementById('netTitle').textContent = title;
+  document.getElementById('netSub').textContent = sub || '';
+  el.classList.remove('hidden');
+}
+function hideNetOverlay() {
+  const el = document.getElementById('netOverlay');
+  if (el) el.classList.add('hidden');
 }
 
 /* ══════════════ auth UI ══════════════ */
@@ -74,7 +122,6 @@ function buildAuth() {
   // returning player?
   const saved = localStorage.getItem('naija_last');
   if (saved) { document.getElementById('logUser').value = saved; }
-  net.on('auth', onAuth);
 }
 
 function doRegister() {
@@ -114,12 +161,35 @@ A real-time multiplayer life-sim of Nigeria.
 }
 
 function onAuth(msg) {
-  if (!msg.ok) return err(msg.msg || 'Could not sign in.');
+  if (!msg.ok) {
+    // mid-game this means the saved token was rejected — ask for the password once
+    if (started) {
+      net.wantReconnect = false;
+      net.clearSession();
+      showAuthScreen(msg.msg || 'Session expired — please sign in again.');
+    } else {
+      err(msg.msg || 'Could not sign in.');
+    }
+    return;
+  }
+
+  serverRestarting = false;         // we're back
+  // remember the session so a redeploy / dropped socket resumes silently
+  if (msg.token) net.saveSession(msg.token, (msg.player && msg.player.username) || (net.session && net.session.username));
   if (msg.player) net.state.me = msg.player;   // seed state before the first 'you' frame lands
   err('');
+  hideNetOverlay();
   document.getElementById('auth').classList.add('hidden');
   document.getElementById('game').classList.remove('hidden');
-  if (!started) startGame();
+
+  if (!started) { startGame(); return; }
+
+  // ── resumed an existing session: pick up exactly where we left off ──
+  const p = me();
+  if (p && p.districtId && view.districtId !== p.districtId) view.setDistrict(p.districtId, p.x, p.y);
+  updateHud();
+  syncVenuePanel();
+  toast(msg.resumed ? 'Back online.' : 'Signed in.', 'good', msg.resumed ? '🔌' : '✅');
 }
 
 /* ══════════════ game ══════════════ */
@@ -147,7 +217,6 @@ function startGame() {
   net.on('you', () => { updateHud(); syncVenuePanel(); });
   net.on('world', () => { updateHud(); checkBanner(); });
   net.on('nearby', () => { syncVenuePanel(); });
-  net.on('closed', () => toast('Disconnected. Trying to reconnect — reload if it does not come back.', 'bad'));
 
   // keys
   addEventListener('keydown', (e) => {

@@ -9,6 +9,8 @@ const wsUrl = (() => {
   return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
 })();
 
+const SESSION_KEY = 'naija_session';
+
 class Net {
   constructor() {
     this.ws = null;
@@ -19,24 +21,65 @@ class Net {
     this.connected = false;
     this.queue = [];
     this.lastMoveSent = 0;
+
+    /* ── session + reconnect ─────────────────────────────────────────────
+       The server hands out a token at sign-in and stores it on the player,
+       so it survives a restart. We keep it in localStorage and replay it on
+       every reconnect — a redeploy then costs players a few seconds of
+       "reconnecting…" instead of a trip back to the login screen.        */
+    this.session = null;
+    try { this.session = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch (e) {}
+    this.wantReconnect = true;
+    this.reconnectDelay = 800;
+    this.reconnectTimer = null;
+  }
+
+  saveSession(token, username) {
+    this.session = { token, username };
+    try { localStorage.setItem(SESSION_KEY, JSON.stringify(this.session)); } catch (e) {}
+  }
+  clearSession() {
+    this.session = null;
+    try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
   }
 
   connect() {
     return new Promise((resolve, reject) => {
       try { this.ws = new WebSocket(wsUrl); } catch (e) { reject(e); return; }
+      let settled = false;
       this.ws.onopen = () => {
         this.connected = true;
+        this.reconnectDelay = 800;                       // reset backoff on success
         for (const m of this.queue) this.ws.send(JSON.stringify(m));
         this.queue = [];
-        resolve();
+        if (this.session && this.session.token) this.send({ t: 'resume', token: this.session.token });
+        this.emit('open', {});
+        if (!settled) { settled = true; resolve(); }
       };
-      this.ws.onerror = (e) => reject(e);
-      this.ws.onclose = () => { this.connected = false; this.emit('closed', {}); };
+      this.ws.onerror = (e) => { if (!settled) { settled = true; reject(e); } };
+      this.ws.onclose = () => {
+        this.connected = false;
+        if (!settled) { settled = true; reject(new Error('socket closed')); }
+        this.emit('closed', {});
+        this.scheduleReconnect();
+      };
       this.ws.onmessage = (ev) => {
         let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
         this.handle(msg);
       };
     });
+  }
+
+  /* Reconnect with exponential backoff — forever, until we're told to stop. */
+  scheduleReconnect() {
+    if (!this.wantReconnect || this.reconnectTimer) return;
+    const delay = this.reconnectDelay;
+    this.reconnectDelay = Math.min(Math.round(this.reconnectDelay * 1.8), 12000);
+    this.emit('reconnecting', { in: Math.round(delay / 1000) });
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connect().catch(() => {});          // failures reschedule via onclose
+    }, delay);
   }
 
   handle(msg) {
@@ -92,6 +135,7 @@ class Net {
   }
 
   chat(scope, text, to) { this.send({ t: 'chat', scope, text, to }); }
+  logout() { this.wantReconnect = false; this.clearSession(); try { this.ws && this.ws.close(); } catch (e) {} }
   register(o) { this.send({ t: 'register', ...o }); }
   login(u, p) { this.send({ t: 'login', username: u, password: p }); }
 }
