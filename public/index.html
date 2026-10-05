@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+<title>Naija Life — live your Naija story</title>
+<meta name="description" content="A real-time multiplayer life-sim of Nigeria. 12 cities, a working phone, real naira, and every hustle. Play free in your browser."/>
+<meta name="theme-color" content="#0b1014"/>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🇳🇬</text></svg>"/>
+<link rel="stylesheet" href="/css/app.css"/>
+</head>
+<body>
+
+<!-- ══════════════ BOOT ══════════════ -->
+<div id="boot">
+  <div class="boot-flag"><span></span><span></span><span></span></div>
+  <h1 class="logo">Naija<span>Life</span></h1>
+  <p class="tagline">One country. Every hustle.</p>
+  <div class="boot-status" id="bootStatus">connecting…</div>
+</div>
+
+<!-- ══════════════ AUTH ══════════════ -->
+<div id="auth" class="hidden">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-head">
+        <h1 class="logo">Naija<span>Life</span></h1>
+        <p class="tagline" id="authTagline">Create your character. Pick your struggle.</p>
+      </div>
+
+      <div class="tabs" id="authTabs">
+        <button class="tab active" data-tab="new">New life</button>
+        <button class="tab" data-tab="return">Returning</button>
+      </div>
+
+      <!-- NEW LIFE -->
+      <div class="pane" id="pane-new">
+        <div class="field-row">
+          <label class="field">
+            <span>Display name</span>
+            <input id="regName" maxlength="18" placeholder="e.g. Chidi Balogun"/>
+          </label>
+          <label class="field">
+            <span>Username</span>
+            <input id="regUser" maxlength="16" placeholder="chidi_b" autocomplete="off"/>
+          </label>
+        </div>
+        <label class="field">
+          <span>Password</span>
+          <input id="regPass" type="password" placeholder="4+ characters" autocomplete="new-password"/>
+        </label>
+
+        <div class="section-label">Who are you? <em>This decides your money, city and skills.</em></div>
+        <div class="backstories" id="backstories"></div>
+
+        <div class="section-label">Start city <em>(defaults to your story’s city)</em></div>
+        <div class="city-picker" id="cityPicker"></div>
+
+        <button class="btn-primary big" id="btnRegister">Enter Naija →</button>
+        <p class="fineprint">No email. No ad trackers. 18+. <a href="#" id="showHelp">What is this?</a></p>
+      </div>
+
+      <!-- RETURNING -->
+      <div class="pane hidden" id="pane-return">
+        <label class="field"><span>Username</span><input id="logUser" autocomplete="username"/></label>
+        <label class="field"><span>Password</span><input id="logPass" type="password" autocomplete="current-password"/></label>
+        <button class="btn-primary big" id="btnLogin">Continue →</button>
+        <p class="fineprint">Your life is saved on the server. Pick up where you left off.</p>
+      </div>
+
+      <div class="auth-error" id="authError"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ GAME ══════════════ -->
+<div id="game" class="hidden">
+  <canvas id="world"></canvas>
+  <div id="vignette"></div>
+
+  <!-- HUD -->
+  <header id="hud">
+    <div class="hud-left">
+      <div class="place" id="hudPlace">
+        <span class="place-city">Lagos</span>
+        <span class="place-district">Lekki Phase 1</span>
+      </div>
+      <div class="clock-row">
+        <span id="hudTime">7:00 AM</span>
+        <span id="hudWeather" title="weather">☀️</span>
+        <span id="hudDay">Day 1</span>
+      </div>
+    </div>
+
+    <div class="hud-mid">
+      <div class="money" id="hudMoney">₦0</div>
+      <div class="money-sub"><span id="hudCash">₦0 cash</span> · <span id="hudBank">₦0 bank</span></div>
+    </div>
+
+    <div class="hud-right">
+      <div class="needs" id="hudNeeds"></div>
+      <div class="hud-chips">
+        <span class="chip" id="chipOnline" title="players online">🟢 0</span>
+        <span class="chip" id="chipNet" title="network + data">📶 MTL</span>
+        <span class="chip" id="chipJob" title="job">😐 No job</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- venue prompt -->
+  <div id="prompt" class="hidden"><span id="promptKey">E</span><span id="promptText">Enter</span></div>
+
+  <!-- travelling overlay -->
+  <div id="travelling" class="hidden">
+    <div class="trav-card">
+      <div class="trav-emoji" id="travEmoji">🚐</div>
+      <div class="trav-title" id="travTitle">On the road…</div>
+      <div class="trav-sub" id="travSub">Lagos traffic is doing its thing</div>
+      <div class="trav-bar"><div id="travFill"></div></div>
+      <div class="trav-lines" id="travLines"></div>
+    </div>
+  </div>
+
+  <!-- chat -->
+  <section id="chat" class="collapsed">
+    <div class="chat-head">
+      <div class="chat-tabs">
+        <button class="ctab active" data-scope="local">Area</button>
+        <button class="ctab" data-scope="city">City</button>
+        <button class="ctab" data-scope="global">Naija</button>
+        <button class="ctab" data-scope="dm">DMs<span class="dot hidden" id="dmDot"></span></button>
+      </div>
+      <button id="chatToggle" title="collapse">▾</button>
+    </div>
+    <div class="chat-log" id="chatLog"></div>
+    <form class="chat-form" id="chatForm">
+      <input id="chatInput" maxlength="280" placeholder="Talk your own…" autocomplete="off"/>
+      <button type="submit">➤</button>
+    </form>
+  </section>
+
+  <!-- dock -->
+  <nav id="dock">
+    <button class="dock-btn" id="btnPhone" title="Phone (P)"><span>📱</span><em>Phone</em></button>
+    <button class="dock-btn" id="btnMap" title="Map (M)"><span>🗺️</span><em>Map</em></button>
+    <button class="dock-btn" id="btnBag" title="Bag (B)"><span>🎒</span><em>Bag</em></button>
+    <button class="dock-btn" id="btnMe" title="Profile (C)"><span>🧍🏾</span><em>Me</em></button>
+    <button class="dock-btn" id="btnMenu" title="Menu (Esc)"><span>☰</span><em>Menu</em></button>
+  </nav>
+
+  <!-- phone -->
+  <div id="phoneScreen" class="hidden">
+    <div class="phone">
+      <div class="phone-notch"></div>
+      <div class="phone-status">
+        <span id="pTime">7:00</span>
+        <span class="spacer"></span>
+        <span id="pNet">MTL</span>
+        <span id="pData">📶</span>
+        <span id="pBatt">🔋</span>
+      </div>
+      <div class="phone-screen" id="phoneView"></div>
+      <div class="phone-home" id="phoneHome"></div>
+    </div>
+  </div>
+
+  <!-- map / search -->
+  <div id="mapScreen" class="hidden">
+    <div class="map-panel">
+      <div class="map-head">
+        <input id="mapSearch" placeholder="Search anywhere in Naija — “amala”, “Quilox”, “Kurmi market”…"/>
+        <button id="mapClose">✕</button>
+      </div>
+      <div class="map-body">
+        <div class="map-cities" id="mapCities"></div>
+        <div class="map-results" id="mapResults"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- generic modal -->
+  <div id="modal" class="hidden">
+    <div class="modal-card">
+      <div class="modal-head"><h3 id="modalTitle">Title</h3><button id="modalClose">✕</button></div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-foot" id="modalFoot"></div>
+    </div>
+  </div>
+
+  <!-- inside-venue panel -->
+  <div id="venuePanel" class="hidden">
+    <div class="vp-head">
+      <div class="vp-emoji" id="vpEmoji">🍲</div>
+      <div>
+        <div class="vp-name" id="vpName"></div>
+        <div class="vp-sub" id="vpSub"></div>
+      </div>
+      <button id="vpLeave" class="vp-close">Leave ✕</button>
+    </div>
+    <div class="vp-chat" id="vpChat"></div>
+    <div class="vp-acts" id="vpActs"></div>
+  </div>
+
+  <!-- touch controls (shown on touch devices only) -->
+  <div id="touch" class="hidden">
+    <div id="stick"><i></i></div>
+    <button id="touchE" title="Enter / Talk">E</button>
+  </div>
+
+  <div id="toasts"></div>
+  <div id="eventBanner" class="hidden"></div>
+</div>
+
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>

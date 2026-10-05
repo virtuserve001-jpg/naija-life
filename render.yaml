@@ -1,0 +1,28 @@
+# ─────────────────────────────────────────────────────────────
+#  RENDER — https://render.com  (easiest one-click deploy)
+#  Dashboard → New → Blueprint → point at this repo.
+#
+#  ⚠ The `disk` below needs a paid plan (Starter, ~$7/mo). On the
+#    free plan the filesystem is ephemeral: your citizens are wiped
+#    on every redeploy or restart. Delete the `disk` block and the
+#    NAIJA_DATA_DIR var if you're testing on free.
+# ─────────────────────────────────────────────────────────────
+services:
+  - type: web
+    name: naija-life
+    runtime: node
+    plan: starter
+    region: frankfurt          # closest region to West Africa
+    branch: main
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NAIJA_DATA_DIR
+        value: /var/data/naija
+    disk:
+      name: naija-world
+      mountPath: /var/data
+      sizeGB: 1
